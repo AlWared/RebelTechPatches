@@ -39,8 +39,8 @@ public:
 	//FloatArray bankR(mikeS64[0], SAMPLE_LEN*NOF_Y_WF*NOF_X_WF);
 	wtf->makeMatrix(morphR, bankL, baseFrequency);				// has to take bankR for L/R different wavetables
 	   
-	float defaultA = 0.00000001;
-	float defaultD = 0.0000001;
+	float defaultA = 0.00000001; 		// short time not applying
+	float defaultD = 0.0000001;			// TO DO : short envelope
 	float defaultR = 0.000000002;
 	
 	shortEnv = new AdsrEnvelope(getSampleRate());	
@@ -113,7 +113,7 @@ public:
     setParameterValue(PARAMETER_BA, 0.0); 
     setParameterValue(PARAMETER_BB, 0.0);
     setParameterValue(PARAMETER_BC, 0.0);
-    setParameterValue(PARAMETER_BD, 0.5);
+    setParameterValue(PARAMETER_BD, 0.0);
   
 ;  }
 ~MorphMagusPatch(){
@@ -147,33 +147,114 @@ public:
     morphR->setMorphY(morphYR);
     morphR->setMorphX(morphXR);
     
-    float tempo = getParameterValue(PARAMETER_BD)+ 0.01;
+    float threshold = 0.08;
+    
+    //
+    //
+    // Tempo detector
+    // up to 2% error at 240BPM with 48KHz 256 blocks
+    //
+    
+    static bool trig, trigm1 = false;
+    static int tempoIncr = 0;
+    static float BPM = 240;
+    static float blockBPM = 240;
+    static float BPMm1 = 240;
+    static float phase = 0;	
+    static int trigCnt = 0;	
+    static float rawBPM = 240;
+    
+    
+    if(getParameterValue(PARAMETER_BD) > threshold)
+    {
+		trig = true;
+	}
+	else trig = false;
+	
+	if (tempoIncr > (6*getSampleRate()/getBlockSize())-1) 						// 6sec without trig
+	{
+		if(trig == false)
+		{
+			phase = 0;
+			BPM = 60/(6-4);														// default BPM
+			tempoIncr = (4*getSampleRate()/getBlockSize())-1;
+		}
+		else
+		{
+			BPM = 60 * getSampleRate() / getBlockSize() / ((int) (getSampleRate() / getBlockSize() / 4 / getParameterValue(PARAMETER_BD)));
+			if (tempoIncr > 6*getSampleRate()/getBlockSize() + (int) (getSampleRate() / (getBlockSize() / 4 / getParameterValue(PARAMETER_BD))))
+			{
+				tempoIncr = 6*getSampleRate()/getBlockSize();
+				phase = 0;
+			}
+		}
+	}
+		
+    if(trig == true && trigm1 == false) 
+    {
+		bool tempoJump = (tempoIncr - 60*getSampleRate()/getBlockSize()/blockBPM)*(tempoIncr - 60*getSampleRate()/getBlockSize()/blockBPM)>1;
+		if(tempoJump && trigCnt>1) 
+		{
+			BPM = ((trigCnt-1)*blockBPM + (60*getSampleRate()/getBlockSize()/tempoIncr)) / trigCnt; 
+			trigCnt = 0; 
+			phase = 0;			
+		}
+		trigCnt++;
+		blockBPM = 60*getSampleRate()/getBlockSize()/tempoIncr;
+		tempoIncr = 0;
+	}
+	else tempoIncr++;
+    trigm1 = trig;
+    
+    //float tempo = getParameterValue(PARAMETER_BD)+ 0.01;
+    //float tempo = 
     float amount = (getParameterValue(PARAMETER_E)-0.5)*2; 			// attenuverter
     int rate = pow(2, (int) ((getParameterValue(PARAMETER_F)*4)));
     
     static int ratem1 = rate;
     
     static float lfo1 = 0;
-    if(lfo1 > 1.0){
+    lfo1 += BPM * getBlockSize() / getSampleRate() / 60;
+    if(lfo1 > 1.0 || phase == 0){
       lfo1 = 0;
-    }else{
     }
-    lfo1 += tempo * getBlockSize() / getSampleRate();
+    else{
+    }
     float lfoInv = lfo1*amount;
     if (lfoInv < 0) {
 		lfoInv += 1*(-amount);
 	}
     setParameterValue(PARAMETER_AE, lfoInv);	
     
-    static float phase = 0;
     if (ratem1 != rate)  {
-		phase = 2*M_PI * (lfo1 - tempo * rate * getBlockSize() / getSampleRate());		// phase sync with lfo1 when switching sine rate
+		phase = 2*M_PI * (lfo1 - rate * BPM * getBlockSize() / getSampleRate() / 60);		// phase sync with lfo1 when switching sine rate
 	}																					// TO DO : wait for the phase to sync when switching
     //amount = 0.3;
-        phase += 2*M_PI * rate * tempo * getBlockSize() / getSampleRate();
+        phase += 2*M_PI * rate * BPM * getBlockSize() / getSampleRate() / 60;
         if(phase >= 2*M_PI)
           phase -= 2*M_PI;
     setParameterValue(PARAMETER_AF, sinf(phase)/3*amount+0.5); 		// +0.5 centered for attenuation
+    	
+    //static float lfo1 = 0;
+    //if(lfo1 > 1.0){
+      //lfo1 = 0;
+    //}else{
+    //}
+    //lfo1 += tempo * getBlockSize() / getSampleRate();
+    //float lfoInv = lfo1*amount;
+    //if (lfoInv < 0) {
+		//lfoInv += 1*(-amount);
+	//}
+    //setParameterValue(PARAMETER_AE, lfoInv);	
+    
+    //if (ratem1 != rate)  {
+		//phase = 2*M_PI * (lfo1 - tempo * rate * getBlockSize() / getSampleRate());		// phase sync with lfo1 when switching sine rate
+	//}																					// TO DO : wait for the phase to sync when switching
+    ////amount = 0.3;
+        //phase += 2*M_PI * rate * tempo * getBlockSize() / getSampleRate();
+        //if(phase >= 2*M_PI)
+          //phase -= 2*M_PI;
+    //setParameterValue(PARAMETER_AF, sinf(phase)/3*amount+0.5); 		// +0.5 centered for attenuation
     
     
 	//amount = 1.0;
@@ -212,9 +293,9 @@ public:
     //lfo2 += tempo * getBlockSize() / getSampleRate();
     //setParameterValue(PARAMETER_AF, lfo2*amount);	
     
+    
     ratem1 = rate;
     
-    float threshold = 0.1;
     
     if(getParameterValue(PARAMETER_BA) > threshold){
       longEnv->gate(true);
@@ -242,7 +323,8 @@ public:
 	}    
 	
     display.update(left, 2, 0.0, 3.0, 0.0);
-    debugMessage("out" , (int)(rate), morphR->getInferiorIndex() )	;	
+    //debugMessage("out" , (int)(rate), morphR->getInferiorIndex() )	;	
+    debugMessage("out" , (float)tempoIncr, BPM )	;	
 
 	}
 	
