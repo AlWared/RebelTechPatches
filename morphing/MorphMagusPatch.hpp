@@ -159,10 +159,8 @@ public:
     static int tempoIncr = 0;
     static float BPM = 240;
     static float blockBPM = 240;
-    static float BPMm1 = 240;
     static float phase = 0;	
     static int trigCnt = 0;	
-    static float rawBPM = 240;
     
     
     if(getParameterValue(PARAMETER_BD) > threshold)
@@ -171,7 +169,20 @@ public:
 	}
 	else trig = false;
 	
-	if (tempoIncr > (6*getSampleRate()/getBlockSize())-1) 						// 6sec without trig
+	if(trig == true && trigm1 == false) 
+    {
+		bool tempoJump = (tempoIncr - 60*getSampleRate()/getBlockSize()/blockBPM)*(tempoIncr - 60*getSampleRate()/getBlockSize()/blockBPM)>1;
+		if(tempoJump && trigCnt>1) 
+		{
+			BPM = ((trigCnt-1)*blockBPM + (60*getSampleRate()/getBlockSize()/tempoIncr)) / trigCnt; 
+			trigCnt = 0; 
+			phase = 0;			
+		}
+		trigCnt++;
+		blockBPM = 60*getSampleRate()/getBlockSize()/tempoIncr;
+		tempoIncr = 0;
+	}
+	else if (tempoIncr > (6*getSampleRate()/getBlockSize())-1) 						// 6sec without trig
 	{
 		if(trig == false)
 		{
@@ -189,21 +200,10 @@ public:
 			}
 		}
 	}
-		
-    if(trig == true && trigm1 == false) 
-    {
-		bool tempoJump = (tempoIncr - 60*getSampleRate()/getBlockSize()/blockBPM)*(tempoIncr - 60*getSampleRate()/getBlockSize()/blockBPM)>1;
-		if(tempoJump && trigCnt>1) 
-		{
-			BPM = ((trigCnt-1)*blockBPM + (60*getSampleRate()/getBlockSize()/tempoIncr)) / trigCnt; 
-			trigCnt = 0; 
-			phase = 0;			
-		}
-		trigCnt++;
-		blockBPM = 60*getSampleRate()/getBlockSize()/tempoIncr;
-		tempoIncr = 0;
-	}
+	
 	else tempoIncr++;
+		
+    
     trigm1 = trig;
     
     //float tempo = getParameterValue(PARAMETER_BD)+ 0.01;
