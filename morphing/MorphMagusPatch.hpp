@@ -55,7 +55,8 @@ public:
 	   
 	   
     clkDet = new ClkDetector(getSampleRate(), getBlockSize());
-    threshold = 0.07
+    clkDet->setSrBlkSize(getSampleRate(), getBlockSize());
+    threshold = 0.07;
     BPM = 240;
     phase = 0;
     
@@ -169,7 +170,7 @@ public:
     morphR->setMorphX(morphXR);
     
 	
-	debug = clkDet->setCLK(getParameterValue(PARAMETER_BD), threshold);
+	debug = clkDet->setCLK(getParameterValue(PARAMETER_BD), threshold, 4);
 	BPM = (clkDet->getBPM());
 	if (clkDet->isPhase0())
 	{
@@ -234,7 +235,7 @@ public:
 	
     display.update(left, 2, 0.0, 3.0, 0.0);
     //debugMessage("out" , (int)(rate), morphR->getInferiorIndex() )	;	
-    debugMessage("out" , ((float)(debug)/((float)(fourSec))), BPM )	;	
+    debugMessage("out" , ((float)(debug)), BPM )	;	
 
 	}
 	
