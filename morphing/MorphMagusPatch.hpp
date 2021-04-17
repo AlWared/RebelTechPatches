@@ -6,6 +6,7 @@
 #include "WTFactory.h"
 #include "VoltsPerOctave.h"
 #include "MonochromeAudioDisplay.hpp"
+#include "ClkDetector.hpp"
 
 #define baseFrequency (20)  /* starting frequency of first table */  // c1 = 32.7 Hz
 
@@ -17,16 +18,29 @@ class MorphMagusPatch : public MonochromeScreenPatch {
 private:
   MorphOsc *morphL;
   MorphOsc *morphR;
+  AdsrEnvelope *longEnv;
+  AdsrEnvelope *shortEnv;
+  ClkDetector *clkDet;
   
   SmoothFloat freqL;
   float FML;
   SmoothFloat freqR;
   float FMR;
+  float morphXL;
+  float morphYL;
+  float morphXR;
+  float morphYR;
+  
+  float threshold;
+  float BPM;	
+  float phase;	
+	
+  int debug;
   
 public:
-  AdsrEnvelope *longEnv;
-  AdsrEnvelope *shortEnv;
   MorphMagusPatch() {	
+	  					
+	debug = 0;
 	  																													
 	FloatArray bankL(spectral64[0], SAMPLE_LEN*NOF_Y_WF*NOF_X_WF);																																
 	//FloatArray bankR(mikeS64[0], SAMPLE_LEN*NOF_Y_WF*NOF_X_WF);
@@ -39,6 +53,12 @@ public:
 	//FloatArray bankR(mikeS64[0], SAMPLE_LEN*NOF_Y_WF*NOF_X_WF);
 	wtf->makeMatrix(morphR, bankL, baseFrequency);				// has to take bankR for L/R different wavetables
 	   
+	   
+    clkDet = new ClkDetector(getSampleRate(), getBlockSize());
+    threshold = 0.07
+    BPM = 240;
+    phase = 0;
+    
 	float defaultA = 0.00000001; 		// short time not applying
 	float defaultD = 0.0000001;			// TO DO : short envelope
 	float defaultR = 0.000000002;
@@ -54,6 +74,7 @@ public:
     longEnv->setDecay(defaultD*6);
     longEnv->setSustain(0.9223f);
     longEnv->setRelease(defaultR*10);
+    
 	
 // Morhp oscilator Left
 	  registerParameter(PARAMETER_A, "TUNE");
@@ -131,15 +152,15 @@ public:
     FloatArray right = buffer.getSamples(RIGHT_CHANNEL);
     hzL.setTune((tune/12.0)-4.0);
     float freq = hzL.getFrequency(left[0]);
-    float freqL = exp(log(freq)+log(2));
-    float morphXL = getParameterValue(PARAMETER_AA);  
-    float morphYL = getParameterValue(PARAMETER_AB); 
+    freqL = exp(log(freq)+log(2));
+    morphXL = getParameterValue(PARAMETER_AA);  
+    morphYL = getParameterValue(PARAMETER_AB); 
     
 	float offsetR = getParameterValue(PARAMETER_C)*12*2;
-	// offsetR = (int) offsetR;
-    float freqR = exp(log(freq)+log(2)*offsetR/12.0);
-    float morphXR = getParameterValue(PARAMETER_AC);  
-    float morphYR = getParameterValue(PARAMETER_AD); 
+	//offsetR = (int) offsetR;
+    freqR = exp(log(freq)+log(2)*offsetR/12.0);
+    morphXR = getParameterValue(PARAMETER_AC);  
+    morphYR = getParameterValue(PARAMETER_AD); 
     
     
     morphL->setMorphY(morphYL);		
@@ -147,67 +168,14 @@ public:
     morphR->setMorphY(morphYR);
     morphR->setMorphX(morphXR);
     
-    float threshold = 0.08;
-    
-    //
-    //
-    // Tempo detector
-    // up to 2% error at 240BPM with 48KHz 256 blocks
-    //
-    
-    static bool trig, trigm1 = false;
-    static int tempoIncr = 0;
-    static float BPM = 240;
-    static float blockBPM = 240;
-    static float phase = 0;	
-    static int trigCnt = 0;	
-    
-    
-    if(getParameterValue(PARAMETER_BD) > threshold)
-    {
-		trig = true;
-	}
-	else trig = false;
 	
-	if(trig == true && trigm1 == false) 
-    {
-		bool tempoJump = (tempoIncr - 60*getSampleRate()/getBlockSize()/blockBPM)*(tempoIncr - 60*getSampleRate()/getBlockSize()/blockBPM)>1;
-		if(tempoJump && trigCnt>1) 
-		{
-			BPM = ((trigCnt-1)*blockBPM + (60*getSampleRate()/getBlockSize()/tempoIncr)) / trigCnt; 
-			trigCnt = 0; 
-			phase = 0;			
-		}
-		trigCnt++;
-		blockBPM = 60*getSampleRate()/getBlockSize()/tempoIncr;
-		tempoIncr = 0;
-	}
-	else if (tempoIncr > (6*getSampleRate()/getBlockSize())-1) 						// 6sec without trig
+	debug = clkDet->setCLK(getParameterValue(PARAMETER_BD), threshold);
+	BPM = (clkDet->getBPM());
+	if (clkDet->isPhase0())
 	{
-		if(trig == false)
-		{
-			phase = 0;
-			BPM = 60/(6-4);														// default BPM
-			tempoIncr = (4*getSampleRate()/getBlockSize())-1;
-		}
-		else
-		{
-			BPM = 60 * getSampleRate() / getBlockSize() / ((int) (getSampleRate() / getBlockSize() / 4 / getParameterValue(PARAMETER_BD)));
-			if (tempoIncr > 6*getSampleRate()/getBlockSize() + (int) (getSampleRate() / (getBlockSize() / 4 / getParameterValue(PARAMETER_BD))))
-			{
-				tempoIncr = 6*getSampleRate()/getBlockSize();
-				phase = 0;
-			}
-		}
+		phase = 0; // this is forced phase, phase has to be looped somewhere else
 	}
-	
-	else tempoIncr++;
-		
     
-    trigm1 = trig;
-    
-    //float tempo = getParameterValue(PARAMETER_BD)+ 0.01;
-    //float tempo = 
     float amount = (getParameterValue(PARAMETER_E)-0.5)*2; 			// attenuverter
     int rate = pow(2, (int) ((getParameterValue(PARAMETER_F)*4)));
     
@@ -227,7 +195,7 @@ public:
     setParameterValue(PARAMETER_AE, lfoInv);	
     
     if (ratem1 != rate)  {
-		phase = 2*M_PI * (lfo1 - rate * BPM * getBlockSize() / getSampleRate() / 60);		// phase sync with lfo1 when switching sine rate
+		phase = 2*M_PI * (lfo1 - rate * BPM * getBlockSize() / getSampleRate() / 60);		
 	}																					// TO DO : wait for the phase to sync when switching
     //amount = 0.3;
         phase += 2*M_PI * rate * BPM * getBlockSize() / getSampleRate() / 60;
@@ -235,64 +203,6 @@ public:
           phase -= 2*M_PI;
     setParameterValue(PARAMETER_AF, sinf(phase)/3*amount+0.5); 		// +0.5 centered for attenuation
     	
-    //static float lfo1 = 0;
-    //if(lfo1 > 1.0){
-      //lfo1 = 0;
-    //}else{
-    //}
-    //lfo1 += tempo * getBlockSize() / getSampleRate();
-    //float lfoInv = lfo1*amount;
-    //if (lfoInv < 0) {
-		//lfoInv += 1*(-amount);
-	//}
-    //setParameterValue(PARAMETER_AE, lfoInv);	
-    
-    //if (ratem1 != rate)  {
-		//phase = 2*M_PI * (lfo1 - tempo * rate * getBlockSize() / getSampleRate());		// phase sync with lfo1 when switching sine rate
-	//}																					// TO DO : wait for the phase to sync when switching
-    ////amount = 0.3;
-        //phase += 2*M_PI * rate * tempo * getBlockSize() / getSampleRate();
-        //if(phase >= 2*M_PI)
-          //phase -= 2*M_PI;
-    //setParameterValue(PARAMETER_AF, sinf(phase)/3*amount+0.5); 		// +0.5 centered for attenuation
-    
-    
-	//amount = 1.0;
-    //static float lfo2 = 0;
-    //if(lfo2 > 1.0){
-      //lfo2 = 0;
-    //}else{
-    //}
-    //lfo2 += tempo * getBlockSize() / getSampleRate();
-    //setParameterValue(PARAMETER_AF, lfo2*amount);	
-    
-    
-    //float amount = (getParameterValue(PARAMETER_E)-0.5)*2; 	// attenuverter
-    //static float lfo1 = 0;
-    //if(lfo1 > 1.0){
-      //lfo1 = 0;
-    //}else{
-    //}
-    //lfo1 += 2 * getBlockSize() / getSampleRate();
-    //tempo = getParameterValue(PARAMETER_F)*getParameterValue(PARAMETER_BD)*10+0.01;  // TO DO : LFO1 rate
-    //lfo1 += tempo * getBlockSize() / getSampleRate();
-    //float lfoInv = lfo1*amount;
-    //if (lfoInv < 0) {
-		//lfoInv += 1*(-amount);
-	//}
-    //setParameterValue(PARAMETER_AE, lfoInv);	
-
-	//amount = 0.3;
-    //static float lfo2 = 0;
-    //if(lfo2 > 1.0){
-      //lfo2 = 0;
-    //}else{
-    //}
-    //lfo2 += 1 * getBlockSize() / getSampleRate();
-    //tempo = getParameterValue(PARAMETER_BD)*4+0.01;
-    //lfo2 += tempo * getBlockSize() / getSampleRate();
-    //setParameterValue(PARAMETER_AF, lfo2*amount);	
-    
     
     ratem1 = rate;
     
@@ -324,7 +234,7 @@ public:
 	
     display.update(left, 2, 0.0, 3.0, 0.0);
     //debugMessage("out" , (int)(rate), morphR->getInferiorIndex() )	;	
-    debugMessage("out" , (float)tempoIncr, BPM )	;	
+    debugMessage("out" , ((float)(debug)/((float)(fourSec))), BPM )	;	
 
 	}
 	
