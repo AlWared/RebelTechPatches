@@ -6,9 +6,34 @@
 #include "WTFactory.h"
 #include "VoltsPerOctave.h"
 #include "MonochromeAudioDisplay.hpp"
-#include "ClkDetector.hpp"
+#include "ClkDetector.h"
 
 #define baseFrequency (20)  /* starting frequency of first table */  // c1 = 32.7 Hz
+#define MAX_OSC (5) 		/* maximum device can handle */
+
+/* TO DO : 
+ * 
+ * VoiceProcessor class to dispatch notes
+ * 
+ * 1) duophonic patch with stereo voices that could play previous note (n-1) if release not finished
+ * 		With midi detected, v/o used as an offset, n message restart n-2 envelope, n+1 does the same with n-1
+ * 		So voices alternates
+ * 		Without midi detected ?? memorize last note with a gate or use additional osc as sub or octave ?
+ * 2) midi keyboard patch with N_OF_OSC voices where n-N_OF_OSC note gets replaced by avtual n note if release not finished
+ * 		n message restart n-5 envelope, n+1 does the same with n-4 and so on
+ * 		So 4 voices alternates every time a midi message is detected
+ * 3) sequencer mono patch ??
+ *  
+ * - Display interpolated waveform on screen
+ * - Display morph position on grid
+ * 
+ * - use API LFOs
+ * - LFOs slower rate
+ * 
+ * - do "one knob" envelope
+ * 
+ * - use wavetables from device ressources
+*/
 
 #include "morphing/wavetables/spectral64.h"		/* left channel wavetable */ 
 #include "morphing/wavetables/mikeS64.h"	/* right channel wavetable */ 
@@ -32,7 +57,7 @@ private:
   float morphYR;
   
   float threshold;
-  float BPM;	
+  float bpm;	
   float phase;	
 	
   int debug;
@@ -55,9 +80,8 @@ public:
 	   
 	   
     clkDet = new ClkDetector(getSampleRate(), getBlockSize());
-    clkDet->setSrBlkSize(getSampleRate(), getBlockSize());
     threshold = 0.07;
-    BPM = 240;
+    bpm = 240;
     phase = 0;
     
 	float defaultA = 0.00000001; 		// short time not applying
@@ -139,6 +163,11 @@ public:
   
 ;  }
 ~MorphMagusPatch(){
+	AdsrEnvelope::destroy(shortEnv);
+	AdsrEnvelope::destroy(longEnv);
+	delete clkDet;
+	delete morphL;
+	delete morphR;
   }
   
   void processAudio(AudioBuffer &buffer) {
@@ -170,20 +199,22 @@ public:
     morphR->setMorphX(morphXR);
     
 	
-	debug = clkDet->setCLK(getParameterValue(PARAMETER_BD), threshold, 4);
-	BPM = (clkDet->getBPM());
+	debug = clkDet->setClk(getParameterValue(PARAMETER_BD), threshold);
+	bpm = (clkDet->getBpm());
 	if (clkDet->isPhase0())
 	{
 		phase = 0; // this is forced phase, phase has to be looped somewhere else
 	}
     
+    // LFOs 
+    //
     float amount = (getParameterValue(PARAMETER_E)-0.5)*2; 			// attenuverter
     int rate = pow(2, (int) ((getParameterValue(PARAMETER_F)*4)));
     
     static int ratem1 = rate;
     
     static float lfo1 = 0;
-    lfo1 += BPM * getBlockSize() / getSampleRate() / 60;
+    lfo1 += bpm * getBlockSize() / getSampleRate() / 60;
     if(lfo1 > 1.0 || phase == 0){
       lfo1 = 0;
     }
@@ -196,10 +227,10 @@ public:
     setParameterValue(PARAMETER_AE, lfoInv);	
     
     if (ratem1 != rate)  {
-		phase = 2*M_PI * (lfo1 - rate * BPM * getBlockSize() / getSampleRate() / 60);		
+		phase = 2*M_PI * (lfo1 - rate * bpm * getBlockSize() / getSampleRate() / 60);		
 	}																					// TO DO : wait for the phase to sync when switching
     //amount = 0.3;
-        phase += 2*M_PI * rate * BPM * getBlockSize() / getSampleRate() / 60;
+        phase += 2*M_PI * rate * bpm * getBlockSize() / getSampleRate() / 60;
         if(phase >= 2*M_PI)
           phase -= 2*M_PI;
     setParameterValue(PARAMETER_AF, sinf(phase)/3*amount+0.5); 		// +0.5 centered for attenuation
@@ -207,7 +238,8 @@ public:
     
     ratem1 = rate;
     
-    
+    // Envelopes
+    //
     if(getParameterValue(PARAMETER_BA) > threshold){
       longEnv->gate(true);
     }
@@ -222,6 +254,8 @@ public:
     else shortEnv->gate(false);
     setParameterValue(PARAMETER_AH, shortEnv->getNextSample());
     
+    // Audio block
+    //
     for(int n = 0; n<buffer.getSize(); n++){
 		
     morphL->setFrequency(freqL+right[n]/gain*FML*freqL/2);
@@ -233,14 +267,18 @@ public:
 		
 	}    
 	
+	// message display
+	//
     display.update(left, 2, 0.0, 3.0, 0.0);
     //debugMessage("out" , (int)(rate), morphR->getInferiorIndex() )	;	
-    debugMessage("out" , ((float)(debug)), BPM )	;	
+    debugMessage("out" , ((float)(debug)), bpm )	;	
 
 	}
 	
+	// Screen
+	//
 MonochromeAudioDisplay display;
-
+	
   void processScreen(MonochromeScreenBuffer& screen){
     display.draw(screen, WHITE);
    }

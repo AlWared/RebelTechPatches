@@ -1,6 +1,9 @@
 #include "WTFactory.h"
 
-
+/*
+ * WTFactory set a wavetable from a raw sample and generate band limited waves to reduce aliasing
+ * 
+*/ 
 
 int WTFactory::calccycles(int WTlen, int fulllen) {
 	
@@ -40,10 +43,10 @@ int WTFactory::makeWaveTable(MorphOsc *osc, FloatArray sample, float baseFrequen
 
 	for (int i=0; i<(NOF_BandLimWF); i++)  {
 		fftoffs /= 2;
-		fft.setMagnitude(zeros, fftoffs, (fft.getSize())-fftoffs);
+		fft.setMagnitude(zeros, fftoffs, (fft.getSize())-fftoffs);			// band limiting
 		tmp.copyFrom(fft);
 		fourier->ifft(tmp, dest);
-		ret = osc->addWaveTable(dest.getSize(), dest.getData(), topFreq, WFidX, WFidY, NOF_Y_WF);
+		ret = osc->addWaveTable(dest.getSize(), dest.getData(), topFreq, WFidX, WFidY, NOF_Y_WF);		// store waves
 		topFreq *= 2.0;
 		
 	}
@@ -66,5 +69,4 @@ void WTFactory::makeMatrix(MorphOsc *osc, FloatArray bank, float baseFrequency) 
 			makeWaveTable(osc, tempsample, baseFrequency, WFidX, WFidY);
 		} 
 	}
-    //return 0;
 }

@@ -1,5 +1,10 @@
 #include "MorphOsc.h"
 
+/*
+ * MorphOsc stores waveforms and generate a 2D interpolated wave 
+ * 
+*/ 
+
 MorphOsc::MorphOsc(void) {										
     phasor = 0.0;
     phaseInc = 0.0;
@@ -28,11 +33,6 @@ MorphOsc::~MorphOsc(void) {
 }
 
 
-//void MorphOsc::setWaveTables(WTFactory *wtf, FloatArray banks, float baseFrequency)  { 
-		////FloatArray bank = banks.subArray(Idx*SAMPLE_LEN*NOF_Y_WF, SAMPLE_LEN*NOF_Y_WF);
-		//wtf->makeMatrix(bank, baseFrequency);
-    
-//}
 
 
 // addWaveTable
@@ -48,7 +48,6 @@ int MorphOsc::addWaveTable(int len, float *waveTableIn, float topFreq, int WFidX
     	
     if (this->totalWaves < numWaveTableSlots) {
         float *waveTable = this->WaveTables[this->totalWaves].waveTable = new float[len];
-      //  this->WaveTables[this->totalWaves].waveTable = waveTableIn; // new float[len];
         this->WaveTables[this->totalWaves].waveTableLen = len;
         this->WaveTables[this->totalWaves].topFreq = topFreq;
         this->WaveTables[this->totalWaves].waveformidX = WFidX;
@@ -93,8 +92,7 @@ float MorphOsc::getOutputAtIndex(int waveTableIdx) {
 }
 
 
-float MorphOsc::getMorphOutput() {
-    // grab the appropriate extWF and then BL
+float MorphOsc::getMorphOutput() {		// grab the appropriate extWF and then BL
 
     this->numBLWaveForms = (this->totalWaves) / ((this->numYaxisWaveForms)*(this->numXaxisWaveForms));
 
@@ -124,7 +122,7 @@ float MorphOsc::getMorphOutput() {
     float upXdownY = getOutputAtIndex(waveTableIdx);
 
 
-    // linear interpolation
+    // linear interpolation in 2D
     float temp = (this->morphSelY) * (this->numYaxisWaveForms); 
     int intPart = temp;
     float fracPart = temp - intPart;
@@ -135,8 +133,6 @@ float MorphOsc::getMorphOutput() {
     temp = (this->morphSelX) * (this->numXaxisWaveForms); 
     intPart = temp;
     fracPart = temp - intPart;
-    //(downXdownY + downXupY) *= (1.0 - fracPart);
-    //(upXdownY + upXupY) *= fracPart;
     return ((downXdownY + downXupY) * (1.0 - fracPart) + (upXdownY + upXupY) * fracPart)/2 ;
 }
 

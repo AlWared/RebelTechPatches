@@ -1,22 +1,17 @@
 #include "message.h"
 #include "Patch.h"
 
-//#include "WTFactory.h"
-
 
 
 #ifndef Test_WaveTableOsc_h
 #define Test_WaveTableOsc_h
 
 
-//#define c1 (32.7) , c4 (261) 
 
 #define sampleRate 48000
 
 #define SAMPLE_LEN 256
-//#define NOF_OSC 8
 #define NOF_X_WF 8
-//#define NOF_SAMPLES 8
 #define NOF_Y_WF 8
 #define NOF_BandLimWF 7
 
