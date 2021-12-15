@@ -42,7 +42,7 @@ public:
 	
 	void fillRates(double* rate0, int totalRatios0);
 	void fillWT(FloatArray wt0);
-	float getLfo();
+	float getOutAtPhase(double phase0);
 	float getTriLfo(double phase0);
 	float getExtWave(double phase0);
 	void updatePhase();
@@ -57,6 +57,8 @@ public:
 	void offsetPhase(double phaseOffs0);
 	float getBpm();
 	float getRate();
+	double getPhase();
+	int getTotalTypes();
 	
 };
 
@@ -98,6 +100,14 @@ inline float Lfo::getBpm() {
 inline float Lfo::getRate() {
 	//return Rates[rateSel].rate;
 	return phaseOffs;
+}	
+	
+inline double Lfo::getPhase() {
+	return phase;
+}
+	
+inline int Lfo::getTotalTypes() {
+	return totalLfoTypes;
 }
 
 

@@ -2,20 +2,14 @@
 #define __Lfo_cpp
 
 #include "Lfo.h"
-/* TO DO : 
- * 
- * addJitter
- * lisser
- * 
-*/
-
 
 
 /* Lfo
  * 
  * Syncable LFO
  * Using high-speed rates at high BPM may not give a precise result unless process blocks get shorten
- * It is designed to use a full [0-1[ range, therefore it is centered around +0.5
+ * It is designed to use a full [0-1] range, therefore center is +0.5
+ * 
  * 
  * Order to call the members :
  * 
@@ -107,21 +101,25 @@ void Lfo::fillWT(FloatArray wt0) {
 	for (int WFid=0; WFid<WAVETABLE_SIZE; WFid++) {
 		tempArray = wt0.subArray(WFid*WAVE_LENGTH, WAVE_LENGTH);
 		for (int i=0; i<WAVE_LENGTH; i++) {
-			wt[WFid][i] = tempArray.getElement(i);
+			wt[WFid][i] = tempArray.getElement(i) * 0.5 + 0.5;		// [0;1] bounds, center at 0.5
 		}
 	}
 	FloatArray::destroy(tempArray);
 }
 
-float Lfo::getLfo() {   				
+float Lfo::getOutAtPhase(double phase0) {   
+					
 	int select = typeSel;
-	double lfoPhase = phase + phaseOffs;
-	if (lfoPhase >= 1) {
-		lfoPhase -= 1;
-	}
-	if (lfoPhase <0) {
-		lfoPhase += 1;
-	}
+	double lfoPhase = phase0 + 1.0;
+	lfoPhase = lfoPhase - (double)((int)lfoPhase);
+	
+	//if (lfoPhase >= 1) {
+		//lfoPhase -= 1;
+	//}
+	//if (lfoPhase <0) {
+		//lfoPhase += 1;
+	//}
+	
 	switch(select) {
 		
 		case	0:	// downRamp
@@ -209,6 +207,8 @@ void Lfo::updatePhase() {
 	else {
 		phase += bpm * getBlockSize() / getSampleRate() / 60 / rate;
 	}*/
+	//phase += (double)bpm * (double)blockSize / (double)60 / (double)sr / (double)Rates[rateSel].rate;
+	
 	phase += (double)bpm * (double)blockSize * (double)Rates[rateSel].den / (double)60 / (double)sr / (double)Rates[rateSel].num;
 	
 	if (phase >= 1) {
